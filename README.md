@@ -29,14 +29,14 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 ## Installation
 
 ```bash
-composer require datum/datum
+composer require vaibhavpandeyvpz/datum
 ```
 
 Or if you want to install the databoss dependency separately:
 
 ```bash
 composer require vaibhavpandeyvpz/databoss ^2.0
-composer require datum/datum
+composer require vaibhavpandeyvpz/datum
 ```
 
 ## Quick Start

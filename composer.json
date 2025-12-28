@@ -1,5 +1,5 @@
 {
-  "name": "datum/datum",
+  "name": "vaibhavpandeyvpz/datum",
   "description": "A simple Active Record ORM for PHP built on top of databoss",
   "type": "library",
   "license": "MIT",
