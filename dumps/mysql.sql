@@ -1,0 +1,44 @@
+SET SQL_MODE=ANSI_QUOTES;
+
+CREATE TABLE IF NOT EXISTS "users" (
+    "id" BIGINT UNSIGNED AUTO_INCREMENT,
+    "name" VARCHAR(255) NOT NULL,
+    "email" VARCHAR(255) NOT NULL,
+    "age" SMALLINT NULL,
+    "created_at" TIMESTAMP NULL,
+    PRIMARY KEY ("id")
+) ENGINE InnoDB;
+
+CREATE TABLE IF NOT EXISTS "profiles" (
+    "id" BIGINT UNSIGNED AUTO_INCREMENT,
+    "user_id" BIGINT UNSIGNED NOT NULL,
+    "bio" TEXT NULL,
+    "avatar" VARCHAR(255) NULL,
+    PRIMARY KEY ("id"),
+    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+) ENGINE InnoDB;
+
+CREATE TABLE IF NOT EXISTS "posts" (
+    "id" BIGINT UNSIGNED AUTO_INCREMENT,
+    "user_id" BIGINT UNSIGNED NOT NULL,
+    "title" VARCHAR(255) NOT NULL,
+    "content" TEXT NULL,
+    "created_at" TIMESTAMP NULL,
+    PRIMARY KEY ("id"),
+    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+) ENGINE InnoDB;
+
+CREATE TABLE IF NOT EXISTS "roles" (
+    "id" BIGINT UNSIGNED AUTO_INCREMENT,
+    "name" VARCHAR(255) NOT NULL,
+    PRIMARY KEY ("id")
+) ENGINE InnoDB;
+
+CREATE TABLE IF NOT EXISTS "user_roles" (
+    "user_id" BIGINT UNSIGNED NOT NULL,
+    "role_id" BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY ("user_id", "role_id"),
+    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE,
+    FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE CASCADE
+) ENGINE InnoDB;
+

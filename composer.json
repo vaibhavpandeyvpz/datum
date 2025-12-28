@@ -1,0 +1,23 @@
+{
+  "name": "datum/datum",
+  "description": "A simple Active Record ORM for PHP built on top of databoss",
+  "type": "library",
+  "license": "MIT",
+  "require": {
+    "php": "^8.2",
+    "vaibhavpandeyvpz/databoss": "^2.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Datum\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Datum\\Tests\\": "tests/"
+    }
+  }
+}
