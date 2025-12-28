@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS "users" (
     "email" VARCHAR(255) NOT NULL,
     "age" SMALLINT NULL,
     "created_at" TIMESTAMP NULL,
+    "updated_at" TIMESTAMP NULL,
     "metadata" TEXT NULL,
     "is_active" TINYINT NULL,
     PRIMARY KEY ("id")
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS "posts" (
     "title" VARCHAR(255) NOT NULL,
     "content" TEXT NULL,
     "created_at" TIMESTAMP NULL,
+    "updated_at" TIMESTAMP NULL,
     PRIMARY KEY ("id"),
     FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
 ) ENGINE InnoDB;

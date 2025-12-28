@@ -10,6 +10,7 @@ use Databoss\Connection;
 use Databoss\DatabaseDriver;
 use Datum\Model;
 use PHPUnit\Framework\TestCase;
+use Samay\FrozenClock;
 
 /**
  * Class ModelTest
@@ -44,12 +45,41 @@ class ModelTest extends TestCase
         }
     }
 
+    private function ensureUpdatedAtColumn(Connection $connection, string $table): void
+    {
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        try {
+            if ($driver === 'pgsql') {
+                $connection->execute("ALTER TABLE \"{$table}\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NULL");
+            } elseif ($driver === 'sqlite') {
+                try {
+                    $connection->execute("ALTER TABLE \"{$table}\" ADD COLUMN \"updated_at\" TIMESTAMP NULL");
+                } catch (\Exception $e) {
+                    // Column might already exist, ignore
+                }
+            } else {
+                // MySQL - check if column exists first
+                try {
+                    $result = $connection->query("SHOW COLUMNS FROM \"{$table}\" LIKE 'updated_at'");
+                    if (empty($result)) {
+                        $connection->execute("ALTER TABLE \"{$table}\" ADD COLUMN \"updated_at\" TIMESTAMP NULL");
+                    }
+                } catch (\Exception $e) {
+                    // Ignore
+                }
+            }
+        } catch (\Exception $e) {
+            // Column might already exist or other error, try to continue
+        }
+    }
+
     /**
      * @dataProvider provideConnection
      */
     public function test_use_connection(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         // Test that connection works by using it
         $this->truncateTable($connection, 'users');
         $user = new \Datum\Tests\User(['name' => 'Test', 'email' => 'test@example.com']);
@@ -63,7 +93,7 @@ class ModelTest extends TestCase
     public function test_use_connection_factory(Connection $connection): void
     {
         $factoryCalled = false;
-        Model::use(function () use (&$factoryCalled, $connection) {
+        Model::connect(function () use (&$factoryCalled, $connection) {
             $factoryCalled = true;
 
             return $connection;
@@ -88,7 +118,7 @@ class ModelTest extends TestCase
      */
     public function test_find(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -111,7 +141,7 @@ class ModelTest extends TestCase
      */
     public function test_find_not_found(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = User::find(99999);
@@ -123,7 +153,7 @@ class ModelTest extends TestCase
      */
     public function test_find_or_fail(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -143,7 +173,7 @@ class ModelTest extends TestCase
      */
     public function test_find_or_fail_throws_exception(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $this->expectException(\RuntimeException::class);
@@ -155,7 +185,7 @@ class ModelTest extends TestCase
      */
     public function test_all(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'User 1', 'email' => 'user1@example.com']);
@@ -173,7 +203,7 @@ class ModelTest extends TestCase
      */
     public function test_where(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'John', 'email' => 'john@example.com', 'age' => 25]);
@@ -190,7 +220,7 @@ class ModelTest extends TestCase
      */
     public function test_where_with_operators(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'John', 'email' => 'john@example.com', 'age' => 25]);
@@ -207,7 +237,7 @@ class ModelTest extends TestCase
      */
     public function test_save_insert(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new User([
@@ -228,7 +258,7 @@ class ModelTest extends TestCase
      */
     public function test_save_update(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -253,7 +283,7 @@ class ModelTest extends TestCase
      */
     public function test_delete(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -278,7 +308,7 @@ class ModelTest extends TestCase
      */
     public function test_attribute_access(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
@@ -294,7 +324,7 @@ class ModelTest extends TestCase
      */
     public function test_to_array(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -317,7 +347,7 @@ class ModelTest extends TestCase
      */
     public function test_key(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -336,7 +366,7 @@ class ModelTest extends TestCase
      */
     public function test_query_builder_chain(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'A', 'email' => 'a@example.com', 'age' => 20]);
@@ -358,7 +388,7 @@ class ModelTest extends TestCase
      */
     public function test_query_builder_first(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'First', 'email' => 'first@example.com']);
@@ -382,7 +412,7 @@ class ModelTest extends TestCase
      */
     public function test_query_builder_count(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'User 1', 'email' => 'user1@example.com']);
@@ -397,7 +427,7 @@ class ModelTest extends TestCase
      */
     public function test_query_builder_exists(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $this->assertFalse(User::where(['email' => 'test@example.com'])->exists());
@@ -412,7 +442,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_recreate(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $builder1 = User::where(['name' => 'Test']);
@@ -474,7 +504,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_sort_desc(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'A', 'email' => 'a@example.com', 'age' => 20]);
@@ -496,7 +526,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_offset(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'A', 'email' => 'a@example.com', 'age' => 20]);
@@ -520,7 +550,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_first_with_offset(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'First', 'email' => 'first@example.com', 'age' => 20]);
@@ -549,7 +579,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_where_chaining(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'John', 'email' => 'john@example.com', 'age' => 25]);
@@ -570,7 +600,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_get_with_limit_zero(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'A', 'email' => 'a@example.com']);
@@ -589,7 +619,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_get_with_no_limit(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', ['name' => 'A', 'email' => 'a@example.com']);
@@ -607,7 +637,7 @@ class ModelTest extends TestCase
      */
     public function test_builder_recreate_preserves_state(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $builder1 = User::where(['age{>}' => 20])
@@ -630,7 +660,7 @@ class ModelTest extends TestCase
      */
     public function test_isset(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
@@ -643,7 +673,7 @@ class ModelTest extends TestCase
     public function test_save_without_connection(): void
     {
         // Reset connection to null by using a factory that returns null
-        Model::use(function () {
+        Model::connect(function () {
             return null;
         });
 
@@ -656,7 +686,7 @@ class ModelTest extends TestCase
      */
     public function test_delete_without_connection(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
@@ -669,7 +699,7 @@ class ModelTest extends TestCase
      */
     public function test_delete_without_id(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Create a user that exists but has no ID
@@ -687,7 +717,7 @@ class ModelTest extends TestCase
      */
     public function test_update_without_id(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Create a user that exists but has no ID
@@ -703,7 +733,7 @@ class ModelTest extends TestCase
     public function test_all_when_query_fails(): void
     {
         // Reset connection to null by using a factory that returns null
-        Model::use(function () {
+        Model::connect(function () {
             return null;
         });
 
@@ -715,7 +745,7 @@ class ModelTest extends TestCase
     public function test_first_when_query_fails(): void
     {
         // Reset connection to null by using a factory that returns null
-        Model::use(function () {
+        Model::connect(function () {
             return null;
         });
 
@@ -728,7 +758,7 @@ class ModelTest extends TestCase
      */
     public function test_find_when_result_false(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Find non-existent ID
@@ -741,7 +771,7 @@ class ModelTest extends TestCase
      */
     public function test_get_with_method_that_throws(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Create a model with a method that throws
@@ -772,7 +802,7 @@ class ModelTest extends TestCase
      */
     public function test_get_with_non_relation_method(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Create a model with a method that returns non-relation
@@ -793,7 +823,7 @@ class ModelTest extends TestCase
      */
     public function test_relationship_caching(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'profiles');
         $this->truncateTable($connection, 'users');
 
@@ -846,7 +876,7 @@ class ModelTest extends TestCase
      */
     public function test_preload_with_object(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -869,7 +899,7 @@ class ModelTest extends TestCase
      */
     public function test_preload_with_array(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
 
         $attributes = [
             'id' => 1,
@@ -888,7 +918,7 @@ class ModelTest extends TestCase
      */
     public function test_assign_and_attribute_methods(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
 
         $user = new User;
 
@@ -909,7 +939,7 @@ class ModelTest extends TestCase
      */
     public function test_key_method(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
@@ -926,7 +956,7 @@ class ModelTest extends TestCase
      */
     public function test_datetime_cast(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Insert with string date
@@ -959,7 +989,7 @@ class ModelTest extends TestCase
      */
     public function test_array_cast(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Insert with JSON string
@@ -992,7 +1022,7 @@ class ModelTest extends TestCase
      */
     public function test_int_cast(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Insert with string number
@@ -1023,7 +1053,7 @@ class ModelTest extends TestCase
      */
     public function test_bool_cast(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         // Insert with int (0/1)
@@ -1054,7 +1084,7 @@ class ModelTest extends TestCase
      */
     public function test_to_array_with_casts(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -1082,7 +1112,7 @@ class ModelTest extends TestCase
      */
     public function test_datetime_cast_with_string(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $user = new UserWithCasts([
@@ -1107,7 +1137,7 @@ class ModelTest extends TestCase
      */
     public function test_datetime_cast_null(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'users');
 
         $connection->insert('users', [
@@ -1121,6 +1151,149 @@ class ModelTest extends TestCase
 
         // Null should remain null
         $this->assertNull($user->created_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_automatic_timestamps_on_insert(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->ensureUpdatedAtColumn($connection, 'users');
+        $this->truncateTable($connection, 'users');
+
+        // Use a frozen clock for deterministic testing
+        $frozenTime = new \DateTimeImmutable('2024-01-15 10:30:00');
+        Model::clock(new FrozenClock($frozenTime));
+
+        $user = new User([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+        ]);
+
+        // Timestamps should not be set before save
+        $this->assertArrayNotHasKey('created_at', $user->attributes());
+        $this->assertArrayNotHasKey('updated_at', $user->attributes());
+
+        $user->save();
+
+        // Timestamps should be automatically set after save
+        $this->assertArrayHasKey('created_at', $user->attributes());
+        $this->assertArrayHasKey('updated_at', $user->attributes());
+        $this->assertNotNull($user->attributes()['created_at']);
+        $this->assertNotNull($user->attributes()['updated_at']);
+
+        // Both should be the same on insert
+        $this->assertEquals('2024-01-15 10:30:00', $user->attributes()['created_at']);
+        $this->assertEquals('2024-01-15 10:30:00', $user->attributes()['updated_at']);
+
+        // Reload from database to verify
+        $reloaded = User::find($user->id);
+        $this->assertNotNull($reloaded->created_at);
+        $this->assertNotNull($reloaded->updated_at);
+        $this->assertEquals('2024-01-15 10:30:00', $reloaded->created_at);
+        $this->assertEquals('2024-01-15 10:30:00', $reloaded->updated_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_automatic_updated_at_on_update(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->ensureUpdatedAtColumn($connection, 'users');
+        $this->truncateTable($connection, 'users');
+
+        // Use a frozen clock for the initial save
+        $initialTime = new \DateTimeImmutable('2024-01-15 10:30:00');
+        Model::clock(new FrozenClock($initialTime));
+
+        $user = new User([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+        ]);
+        $user->save();
+
+        $originalCreatedAt = $user->attributes()['created_at'];
+        $originalUpdatedAt = $user->attributes()['updated_at'];
+
+        // Update the clock to a later time for the update
+        $laterTime = new \DateTimeImmutable('2024-01-15 11:00:00');
+        Model::clock(new FrozenClock($laterTime));
+
+        $user->name = 'Updated';
+        $user->save();
+
+        // created_at should remain the same
+        $this->assertEquals('2024-01-15 10:30:00', $user->attributes()['created_at']);
+
+        // updated_at should be different
+        $this->assertEquals('2024-01-15 11:00:00', $user->attributes()['updated_at']);
+        $this->assertNotEquals($originalUpdatedAt, $user->attributes()['updated_at']);
+
+        // Reload from database to verify
+        $reloaded = User::find($user->id);
+        $this->assertEquals('2024-01-15 10:30:00', $reloaded->created_at);
+        $this->assertEquals('2024-01-15 11:00:00', $reloaded->updated_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_manual_timestamps_are_respected(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->ensureUpdatedAtColumn($connection, 'users');
+        $this->truncateTable($connection, 'users');
+
+        $customCreatedAt = '2020-01-01 10:00:00';
+        $customUpdatedAt = '2020-01-02 10:00:00';
+
+        $user = new User([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+            'created_at' => $customCreatedAt,
+            'updated_at' => $customUpdatedAt,
+        ]);
+        $user->save();
+
+        // Manually set timestamps should be preserved
+        $this->assertEquals($customCreatedAt, $user->attributes()['created_at']);
+        $this->assertEquals($customUpdatedAt, $user->attributes()['updated_at']);
+
+        // Reload from database to verify
+        $reloaded = User::find($user->id);
+        $this->assertEquals($customCreatedAt, $reloaded->created_at);
+        $this->assertEquals($customUpdatedAt, $reloaded->updated_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_timestamps_can_be_disabled(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->ensureUpdatedAtColumn($connection, 'users');
+        $this->truncateTable($connection, 'users');
+
+        // Create a model class with timestamps disabled
+        $user = new class(['name' => 'Test', 'email' => 'test@example.com']) extends User
+        {
+            protected static bool $timestamps = false;
+        };
+
+        $user->save();
+
+        // Timestamps should not be set
+        $this->assertArrayNotHasKey('created_at', $user->attributes());
+        $this->assertArrayNotHasKey('updated_at', $user->attributes());
+
+        // Update should also not set updated_at
+        $user->name = 'Updated';
+        $user->save();
+
+        $this->assertArrayNotHasKey('created_at', $user->attributes());
+        $this->assertArrayNotHasKey('updated_at', $user->attributes());
     }
 
     public function provideConnection(): array

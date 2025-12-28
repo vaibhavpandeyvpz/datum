@@ -9,6 +9,7 @@ use Datum\Relations\Many;
 use Datum\Relations\One;
 use Datum\Relations\Owner;
 use Datum\Relations\Owners;
+use Psr\Clock\ClockInterface;
 
 /**
  * Class Model
@@ -35,6 +36,21 @@ abstract class Model
     protected static array $casts = [];
 
     /**
+     * Indicates if the model should be timestamped.
+     */
+    protected static bool $timestamps = true;
+
+    /**
+     * The name of the "created at" column.
+     */
+    protected static string $createdAt = 'created_at';
+
+    /**
+     * The name of the "updated at" column.
+     */
+    protected static string $updatedAt = 'updated_at';
+
+    /**
      * The connection instance.
      */
     protected static ?ConnectionInterface $connection = null;
@@ -45,6 +61,11 @@ abstract class Model
      * @var callable(): ConnectionInterface|null
      */
     protected static $connectionFactory = null;
+
+    /**
+     * The clock instance for timestamp generation.
+     */
+    protected static ?ClockInterface $clock = null;
 
     /**
      * The model's attributes.
@@ -86,7 +107,7 @@ abstract class Model
      *
      * @param  ConnectionInterface|callable(): ConnectionInterface  $connectionOrFactory
      */
-    public static function use(ConnectionInterface|callable $connectionOrFactory): void
+    public static function connect(ConnectionInterface|callable $connectionOrFactory): void
     {
         if ($connectionOrFactory instanceof ConnectionInterface) {
             static::$connection = $connectionOrFactory;
@@ -95,6 +116,33 @@ abstract class Model
             static::$connectionFactory = $connectionOrFactory;
             static::$connection = null;
         }
+    }
+
+    /**
+     * Set the clock instance for timestamp generation.
+     */
+    public static function clock(ClockInterface $clock): void
+    {
+        static::$clock = $clock;
+    }
+
+    /**
+     * Get the clock instance, creating a default system clock if needed.
+     */
+    protected static function getClock(): ClockInterface
+    {
+        if (static::$clock !== null) {
+            return static::$clock;
+        }
+
+        // Return a default system clock implementation
+        return new class implements ClockInterface
+        {
+            public function now(): \DateTimeImmutable
+            {
+                return new \DateTimeImmutable;
+            }
+        };
     }
 
     /**
@@ -449,6 +497,22 @@ abstract class Model
             return false;
         }
 
+        // Set timestamps if enabled
+        if (static::$timestamps) {
+            $createdAt = static::$createdAt;
+            $updatedAt = static::$updatedAt;
+
+            // Set created_at if not already set
+            if (! isset($this->attributes[$createdAt])) {
+                $this->attributes[$createdAt] = $this->freshTimestamp();
+            }
+
+            // Set updated_at if not already set
+            if (! isset($this->attributes[$updatedAt])) {
+                $this->attributes[$updatedAt] = $this->freshTimestamp();
+            }
+        }
+
         $result = $connection->insert(static::getTable(), $this->attributes);
 
         if ($result !== false) {
@@ -483,6 +547,12 @@ abstract class Model
 
         if ($id === null) {
             return false;
+        }
+
+        // Set updated_at if timestamps are enabled
+        if (static::$timestamps) {
+            $updatedAt = static::$updatedAt;
+            $this->attributes[$updatedAt] = $this->freshTimestamp();
         }
 
         $attributes = $this->attributes;
@@ -544,6 +614,14 @@ abstract class Model
     // </editor-fold>
 
     // <editor-fold desc="Instance Utility Methods">
+
+    /**
+     * Get a fresh timestamp for the model.
+     */
+    public function freshTimestamp(): string
+    {
+        return static::getClock()->now()->format('Y-m-d H:i:s');
+    }
 
     /**
      * Get the primary key value.

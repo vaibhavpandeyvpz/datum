@@ -13,6 +13,7 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 - **Fluent Query Builder**: Chain methods like `where()`, `sort()`, `limit()`, `offset()`, `get()`, `first()`
 - **Relationships**: Support for `one` (has one), `many` (has many), `owner` (belongs to), and `owners` (belongs to many) relationships
 - **Attribute Casting**: Automatic type conversion for DateTime, arrays, JSON, integers, floats, and booleans
+- **Automatic Timestamps**: Automatically manages `created_at` and `updated_at` timestamps (enabled by default)
 - **Lazy Connection Loading**: Connection factory support for lazy database connection creation
 - **Built on Databoss**: Leverages the powerful databoss filtering syntax
 - **Multi-Database Support**: Works with MySQL, PostgreSQL, and SQLite
@@ -60,7 +61,7 @@ $connection = new Connection([
 ]);
 
 // Set the connection for all models
-Model::use($connection);
+Model::connect($connection);
 ```
 
 #### Connection Factory (Lazy Loading)
@@ -72,7 +73,7 @@ use Databoss\Connection;
 use Datum\Model;
 
 // Set a connection factory that will be called lazily when needed
-Model::use(function () {
+Model::connect(function () {
     return new Connection([
         Connection::OPT_DATABASE => 'mydb',
         Connection::OPT_USERNAME => 'root',
@@ -118,7 +119,7 @@ $user = new User([
     'name' => 'John Doe',
     'email' => 'john@example.com',
 ]);
-$user->save();
+$user->save(); // created_at and updated_at are automatically set
 
 // Read
 $user = User::find(1);
@@ -126,13 +127,92 @@ $user = User::findOrFail(1); // Throws exception if not found
 
 // Update
 $user->name = 'Jane Doe';
-$user->save();
+$user->save(); // updated_at is automatically updated
 
 // Delete
 $user->delete();
 
 // Get all
 $users = User::all();
+```
+
+### Automatic Timestamps
+
+Datum automatically manages `created_at` and `updated_at` timestamps by default. When you save a model:
+
+- **On Insert**: Both `created_at` and `updated_at` are automatically set to the current timestamp
+- **On Update**: Only `updated_at` is automatically updated
+
+```php
+$user = new User(['name' => 'John', 'email' => 'john@example.com']);
+$user->save(); // created_at and updated_at are set automatically
+
+// Later...
+$user->name = 'Jane';
+$user->save(); // updated_at is automatically updated, created_at remains unchanged
+```
+
+**Disabling Timestamps:**
+
+If you want to disable automatic timestamps for a model, set the `$timestamps` property to `false`:
+
+```php
+class User extends Model
+{
+    protected static bool $timestamps = false;
+}
+```
+
+**Custom Timestamp Column Names:**
+
+You can customize the timestamp column names:
+
+```php
+class User extends Model
+{
+    protected static string $createdAt = 'created_at';
+    protected static string $updatedAt = 'updated_at';
+}
+```
+
+**Manually Setting Timestamps:**
+
+You can still manually set timestamps, and they will be respected:
+
+```php
+$user = new User([
+    'name' => 'John',
+    'email' => 'john@example.com',
+    'created_at' => '2020-01-01 10:00:00',
+    'updated_at' => '2020-01-02 10:00:00',
+]);
+$user->save(); // Your custom timestamps are preserved
+```
+
+**Using PSR-20 Clock:**
+
+Datum uses PSR-20 `ClockInterface` for timestamp generation, allowing you to inject a custom clock implementation for testing or time manipulation:
+
+```php
+use Psr\Clock\ClockInterface;
+use Datum\Model;
+
+// Set a custom clock
+Model::clock($yourClockInstance);
+```
+
+For testing, you can use `vaibhavpandeyvpz/samay` to control time:
+
+```php
+use Samay\FrozenClock;
+use Datum\Model;
+
+// Freeze time at a specific moment
+$frozenTime = new \DateTimeImmutable('2024-01-15 10:30:00');
+Model::clock(new FrozenClock($frozenTime));
+
+$user = new User(['name' => 'Test']);
+$user->save(); // Will use the frozen time for timestamps
 ```
 
 ### Attribute Casting
@@ -299,9 +379,22 @@ User::where([
 
 ## API Reference
 
+### Model Static Properties
+
+- `protected static ?string $table` - The table name (auto-inferred from class name if not set)
+- `protected static string $primaryKey` - The primary key column name (default: `'id'`)
+- `protected static array $casts` - Attribute casting configuration
+- `protected static bool $timestamps` - Enable/disable automatic timestamp management (default: `true`)
+- `protected static string $createdAt` - The name of the "created at" column (default: `'created_at'`)
+- `protected static string $updatedAt` - The name of the "updated at" column (default: `'updated_at'`)
+
+### Model Static Clock Methods
+
+- `Model::clock(ClockInterface $clock)` - Set a PSR-20 clock instance for timestamp generation
+
 ### Model Static Methods
 
-- `Model::use(ConnectionInterface|callable(): ConnectionInterface $connectionOrFactory)` - Set the database connection directly or use a factory for lazy connection creation
+- `Model::connect(ConnectionInterface|callable(): ConnectionInterface $connectionOrFactory)` - Set the database connection directly or use a factory for lazy connection creation
 - `Model::query()` - Create a new query builder instance
 - `Model::where(array $conditions)` - Create a query with WHERE conditions
 - `Model::find(int|string $id)` - Find a model by primary key (returns `null` if not found)
@@ -319,6 +412,7 @@ User::where([
 - `$model->attribute(string $key)` - Get an attribute value (with casting)
 - `$model->assign(string $key, mixed $value)` - Set an attribute value (with casting)
 - `$model->attributes()` - Get all attributes as array (raw, without casting)
+- `$model->freshTimestamp()` - Get a fresh timestamp string (used internally for automatic timestamps)
 
 ### Builder Methods
 
@@ -368,7 +462,7 @@ $connection = new Connection([
     Connection::OPT_PASSWORD => 'password',
 ]);
 
-Model::use($connection);
+Model::connect($connection);
 
 // Define model
 class User extends Model

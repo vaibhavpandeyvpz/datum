@@ -49,7 +49,7 @@ class RelationshipTest extends TestCase
      */
     public function test_one_relationship(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'profiles');
         $this->truncateTable($connection, 'users');
 
@@ -78,7 +78,7 @@ class RelationshipTest extends TestCase
      */
     public function test_many_relationship(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'posts');
         $this->truncateTable($connection, 'users');
 
@@ -113,7 +113,7 @@ class RelationshipTest extends TestCase
      */
     public function test_owner_relationship(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'profiles');
         $this->truncateTable($connection, 'users');
 
@@ -142,7 +142,7 @@ class RelationshipTest extends TestCase
      */
     public function test_owners_relationship(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'user_roles');
         $this->truncateTable($connection, 'roles');
         $this->truncateTable($connection, 'users');
@@ -175,7 +175,7 @@ class RelationshipTest extends TestCase
      */
     public function test_owners_relationship_empty(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'user_roles');
         $this->truncateTable($connection, 'roles');
         $this->truncateTable($connection, 'users');
@@ -200,7 +200,7 @@ class RelationshipTest extends TestCase
      */
     public function test_relation_invoke(Connection $connection): void
     {
-        Model::use($connection);
+        Model::connect($connection);
         $this->truncateTable($connection, 'profiles');
         $this->truncateTable($connection, 'users');
 
