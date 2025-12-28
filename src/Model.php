@@ -58,7 +58,7 @@ abstract class Model
     /**
      * The connection factory (callable that returns ConnectionInterface).
      *
-     * @var callable(): ConnectionInterface|null
+     * @var (callable(): ConnectionInterface)|null
      */
     protected static $connectionFactory = null;
 
@@ -105,7 +105,7 @@ abstract class Model
     /**
      * Set the connection instance or factory.
      *
-     * @param  ConnectionInterface|callable(): ConnectionInterface  $connectionOrFactory
+     * @param  ConnectionInterface|(callable(): ConnectionInterface)  $connectionOrFactory
      */
     public static function connect(ConnectionInterface|callable $connectionOrFactory): void
     {
@@ -131,12 +131,7 @@ abstract class Model
      */
     protected static function getClock(): ClockInterface
     {
-        if (static::$clock !== null) {
-            return static::$clock;
-        }
-
-        // Return a default system clock implementation
-        return new class implements ClockInterface
+        return static::$clock ??= new class implements ClockInterface
         {
             public function now(): \DateTimeImmutable
             {
@@ -156,13 +151,9 @@ abstract class Model
         }
 
         // If factory is set, create connection from factory
-        if (static::$connectionFactory !== null) {
-            static::$connection = call_user_func(static::$connectionFactory);
-
-            return static::$connection;
-        }
-
-        return null;
+        return static::$connectionFactory !== null
+            ? static::$connection = (static::$connectionFactory)()
+            : null;
     }
 
     /**
@@ -170,15 +161,15 @@ abstract class Model
      */
     protected static function getTable(): string
     {
-        if (static::$table !== null) {
-            return static::$table;
-        }
+        return static::$table ??= match (true) {
+            default => (function () {
+                // Convert class name to table name (e.g., User -> users)
+                $className = basename(str_replace('\\', '/', static::class));
+                $table = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $className));
 
-        // Convert class name to table name (e.g., User -> users)
-        $className = basename(str_replace('\\', '/', static::class));
-        $table = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $className));
-
-        return $table.'s';
+                return $table.'s';
+            })()
+        };
     }
 
     /**
@@ -218,11 +209,7 @@ abstract class Model
     {
         $result = static::where([static::getPrimaryKey() => $id])->first();
 
-        if ($result === false) {
-            return null;
-        }
-
-        return static::preload($result);
+        return $result === false ? null : static::preload($result);
     }
 
     /**
@@ -232,13 +219,7 @@ abstract class Model
      */
     public static function findOrFail(int|string $id): static
     {
-        $model = static::find($id);
-
-        if ($model === null) {
-            throw new \RuntimeException("Model not found with id: {$id}");
-        }
-
-        return $model;
+        return static::find($id) ?? throw new \RuntimeException("Model not found with id: {$id}");
     }
 
     /**
@@ -250,11 +231,7 @@ abstract class Model
     {
         $results = static::query()->get();
 
-        if ($results === false) {
-            return [];
-        }
-
-        return array_map(fn ($result) => static::preload($result), $results);
+        return $results === false ? [] : array_map(fn ($result) => static::preload($result), $results);
     }
 
     /**
@@ -264,11 +241,7 @@ abstract class Model
     {
         $result = static::query()->first();
 
-        if ($result === false) {
-            return null;
-        }
-
-        return static::preload($result);
+        return $result === false ? null : static::preload($result);
     }
 
     // </editor-fold>
@@ -300,11 +273,7 @@ abstract class Model
     {
         $value = $this->attributes[$key] ?? null;
 
-        if ($value === null) {
-            return null;
-        }
-
-        return $this->castAttribute($key, $value);
+        return $value === null ? null : $this->castAttribute($key, $value);
     }
 
     /**
@@ -434,13 +403,9 @@ abstract class Model
                 $relation = $this->$key();
                 if ($relation instanceof \Datum\Relations\Relation) {
                     // Cache the relationship result
-                    if (! isset($this->relations[$key])) {
-                        $this->relations[$key] = $relation->results();
-                    }
-
-                    return $this->relations[$key];
+                    return $this->relations[$key] ??= $relation->results();
                 }
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 // If the method throws an error, fall through to attribute access
             }
         }
@@ -638,13 +603,14 @@ abstract class Model
      */
     public function toArray(): array
     {
-        $array = [];
-
-        foreach ($this->attributes as $key => $value) {
-            $array[$key] = $this->castAttribute($key, $value);
-        }
-
-        return $array;
+        return array_combine(
+            array_keys($this->attributes),
+            array_map(
+                fn ($key, $value) => $this->castAttribute($key, $value),
+                array_keys($this->attributes),
+                $this->attributes
+            )
+        ) ?: [];
     }
 
     // </editor-fold>

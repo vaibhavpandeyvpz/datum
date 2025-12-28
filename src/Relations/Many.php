@@ -14,23 +14,15 @@ use Datum\Model;
 class Many extends Relation
 {
     /**
-     * The foreign key column name.
-     */
-    protected string $foreignKey;
-
-    /**
-     * The local key column name.
-     */
-    protected string $localKey;
-
-    /**
      * Create a new "has many" relationship instance.
      */
-    public function __construct(Model $parent, string $related, string $foreignKey, string $localKey = 'id')
-    {
+    public function __construct(
+        Model $parent,
+        string $related,
+        protected readonly string $foreignKey,
+        protected readonly string $localKey = 'id'
+    ) {
         parent::__construct($parent, $related);
-        $this->foreignKey = $foreignKey;
-        $this->localKey = $localKey;
     }
 
     /**
@@ -53,10 +45,6 @@ class Many extends Relation
     {
         $results = $this->query()->get();
 
-        if ($results === false) {
-            return [];
-        }
-
-        return array_map(fn ($result) => $this->related::preload($result), $results);
+        return $results === false ? [] : array_map(fn ($result) => $this->related::preload($result), $results);
     }
 }

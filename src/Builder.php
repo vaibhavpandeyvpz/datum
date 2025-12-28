@@ -37,26 +37,15 @@ class Builder
      */
     protected ?int $offset = null;
 
-    /**
-     * The table name.
-     */
-    protected ?string $table = null;
-
-    /**
-     * The database connection.
-     */
-    protected ?ConnectionInterface $connection = null;
-
     // <editor-fold desc="Constructor">
 
     /**
      * Create a new query builder instance.
      */
-    public function __construct(?ConnectionInterface $connection = null, ?string $table = null)
-    {
-        $this->connection = $connection;
-        $this->table = $table;
-    }
+    public function __construct(
+        protected ?ConnectionInterface $connection = null,
+        protected ?string $table = null
+    ) {}
 
     // </editor-fold>
 

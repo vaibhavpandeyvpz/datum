@@ -43,7 +43,7 @@ composer require vaibhavpandeyvpz/datum
 
 ### Setting Up the Connection
 
-You can set the connection directly or use a connection factory for lazy connection creation using the `use()` method:
+You can set the connection directly or use a connection factory for lazy connection creation using the `connect()` method:
 
 #### Direct Connection
 

@@ -14,48 +14,18 @@ use Datum\Model;
 class Owners extends Relation
 {
     /**
-     * The pivot table name.
-     */
-    protected string $pivotTable;
-
-    /**
-     * The foreign pivot key column name.
-     */
-    protected string $foreignPivotKey;
-
-    /**
-     * The related pivot key column name.
-     */
-    protected string $relatedPivotKey;
-
-    /**
-     * The parent key column name.
-     */
-    protected string $parentKey;
-
-    /**
-     * The related key column name.
-     */
-    protected string $relatedKey;
-
-    /**
      * Create a new "belongs to many" relationship instance.
      */
     public function __construct(
         Model $parent,
         string $related,
-        string $pivotTable,
-        string $foreignPivotKey,
-        string $relatedPivotKey,
-        string $parentKey = 'id',
-        string $relatedKey = 'id'
+        protected readonly string $pivotTable,
+        protected readonly string $foreignPivotKey,
+        protected readonly string $relatedPivotKey,
+        protected readonly string $parentKey = 'id',
+        protected readonly string $relatedKey = 'id'
     ) {
         parent::__construct($parent, $related);
-        $this->pivotTable = $pivotTable;
-        $this->foreignPivotKey = $foreignPivotKey;
-        $this->relatedPivotKey = $relatedPivotKey;
-        $this->parentKey = $parentKey;
-        $this->relatedKey = $relatedKey;
     }
 
     /**
@@ -92,9 +62,10 @@ class Owners extends Relation
             return $this->related::query()->where([$this->relatedKey => -1]);
         }
 
-        $relatedIds = array_map(function ($row) {
-            return is_object($row) ? $row->{$this->relatedPivotKey} : $row[$this->relatedPivotKey];
-        }, $pivotResults);
+        $relatedIds = array_map(
+            fn ($row) => is_object($row) ? $row->{$this->relatedPivotKey} : $row[$this->relatedPivotKey],
+            $pivotResults
+        );
 
         return $this->related::query()
             ->where([$this->relatedKey => $relatedIds]);
@@ -109,10 +80,6 @@ class Owners extends Relation
     {
         $results = $this->query()->get();
 
-        if ($results === false) {
-            return [];
-        }
-
-        return array_map(fn ($result) => $this->related::preload($result), $results);
+        return $results === false ? [] : array_map(fn ($result) => $this->related::preload($result), $results);
     }
 }

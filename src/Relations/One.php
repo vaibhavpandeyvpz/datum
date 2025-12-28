@@ -14,23 +14,15 @@ use Datum\Model;
 class One extends Relation
 {
     /**
-     * The foreign key column name.
-     */
-    protected string $foreignKey;
-
-    /**
-     * The local key column name.
-     */
-    protected string $localKey;
-
-    /**
      * Create a new "has one" relationship instance.
      */
-    public function __construct(Model $parent, string $related, string $foreignKey, string $localKey = 'id')
-    {
+    public function __construct(
+        Model $parent,
+        string $related,
+        protected readonly string $foreignKey,
+        protected readonly string $localKey = 'id'
+    ) {
         parent::__construct($parent, $related);
-        $this->foreignKey = $foreignKey;
-        $this->localKey = $localKey;
     }
 
     /**
@@ -51,10 +43,6 @@ class One extends Relation
     {
         $result = $this->query()->first();
 
-        if ($result === false) {
-            return null;
-        }
-
-        return $this->related::preload($result);
+        return $result === false ? null : $this->related::preload($result);
     }
 }

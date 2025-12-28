@@ -15,23 +15,12 @@ use Datum\Model;
 abstract class Relation
 {
     /**
-     * The parent model instance.
-     */
-    protected Model $parent;
-
-    /**
-     * The related model class name.
-     */
-    protected string $related;
-
-    /**
      * Create a new relationship instance.
      */
-    public function __construct(Model $parent, string $related)
-    {
-        $this->parent = $parent;
-        $this->related = $related;
-    }
+    public function __construct(
+        protected readonly Model $parent,
+        protected readonly string $related
+    ) {}
 
     /**
      * Get the query builder for the relationship.
