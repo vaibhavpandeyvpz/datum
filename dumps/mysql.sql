@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS "users" (
     "email" VARCHAR(255) NOT NULL,
     "age" SMALLINT NULL,
     "created_at" TIMESTAMP NULL,
+    "metadata" TEXT NULL,
+    "is_active" TINYINT NULL,
     PRIMARY KEY ("id")
 ) ENGINE InnoDB;
 

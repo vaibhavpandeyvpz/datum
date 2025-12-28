@@ -3,7 +3,9 @@ CREATE TABLE IF NOT EXISTS "users" (
     "name" VARCHAR(255) NOT NULL,
     "email" VARCHAR(255) NOT NULL,
     "age" INTEGER NULL,
-    "created_at" TIMESTAMP NULL
+    "created_at" TIMESTAMP NULL,
+    "metadata" TEXT NULL,
+    "is_active" INTEGER NULL
 );
 
 CREATE TABLE IF NOT EXISTS "profiles" (

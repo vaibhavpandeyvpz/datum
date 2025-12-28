@@ -962,32 +962,6 @@ class ModelTest extends TestCase
         Model::use($connection);
         $this->truncateTable($connection, 'users');
 
-        // Add metadata column if it doesn't exist
-        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        try {
-            if ($driver === 'pgsql') {
-                $connection->execute('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "metadata" TEXT NULL');
-            } elseif ($driver === 'sqlite') {
-                try {
-                    $connection->execute('ALTER TABLE "users" ADD COLUMN "metadata" TEXT NULL');
-                } catch (\Exception $e) {
-                    // Column might already exist, ignore
-                }
-            } else {
-                // For MySQL, check if column exists first
-                try {
-                    $result = $connection->query('SHOW COLUMNS FROM "users" LIKE "metadata"');
-                    if (empty($result)) {
-                        $connection->execute('ALTER TABLE "users" ADD COLUMN "metadata" TEXT NULL');
-                    }
-                } catch (\Exception $e) {
-                    // Ignore
-                }
-            }
-        } catch (\Exception $e) {
-            // Column might already exist or other error, try to continue
-        }
-
         // Insert with JSON string
         $connection->insert('users', [
             'name' => 'Test',
@@ -1052,24 +1026,6 @@ class ModelTest extends TestCase
         Model::use($connection);
         $this->truncateTable($connection, 'users');
 
-        // Add is_active column if it doesn't exist
-        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        try {
-            if ($driver === 'sqlite') {
-                $connection->execute('ALTER TABLE "users" ADD COLUMN "is_active" INTEGER NULL');
-            } elseif ($driver === 'pgsql') {
-                $connection->execute('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_active" SMALLINT NULL');
-            } else {
-                // Check if column exists first for MySQL
-                $result = $connection->query('SHOW COLUMNS FROM "users" LIKE "is_active"');
-                if (empty($result)) {
-                    $connection->execute('ALTER TABLE "users" ADD COLUMN "is_active" TINYINT NULL');
-                }
-            }
-        } catch (\Exception $e) {
-            // Column might already exist or other error, try to continue
-        }
-
         // Insert with int (0/1)
         $connection->insert('users', [
             'name' => 'Test',
@@ -1100,48 +1056,6 @@ class ModelTest extends TestCase
     {
         Model::use($connection);
         $this->truncateTable($connection, 'users');
-
-        // Add columns if they don't exist
-        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        try {
-            if ($driver === 'pgsql') {
-                // PostgreSQL supports IF NOT EXISTS
-                $connection->execute('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "metadata" TEXT NULL');
-                $connection->execute('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_active" SMALLINT NULL');
-            } elseif ($driver === 'sqlite') {
-                // SQLite - try to add, ignore if exists
-                try {
-                    $connection->execute('ALTER TABLE "users" ADD COLUMN "metadata" TEXT NULL');
-                } catch (\Exception $e) {
-                    // Ignore
-                }
-                try {
-                    $connection->execute('ALTER TABLE "users" ADD COLUMN "is_active" INTEGER NULL');
-                } catch (\Exception $e) {
-                    // Ignore
-                }
-            } else {
-                // MySQL - check if columns exist first
-                try {
-                    $result = $connection->query('SHOW COLUMNS FROM "users" LIKE "metadata"');
-                    if (empty($result)) {
-                        $connection->execute('ALTER TABLE "users" ADD COLUMN "metadata" TEXT NULL');
-                    }
-                } catch (\Exception $e) {
-                    // Ignore
-                }
-                try {
-                    $result = $connection->query('SHOW COLUMNS FROM "users" LIKE "is_active"');
-                    if (empty($result)) {
-                        $connection->execute('ALTER TABLE "users" ADD COLUMN "is_active" TINYINT NULL');
-                    }
-                } catch (\Exception $e) {
-                    // Ignore
-                }
-            }
-        } catch (\Exception $e) {
-            // Columns might already exist or other error, try to continue
-        }
 
         $connection->insert('users', [
             'name' => 'Test',
