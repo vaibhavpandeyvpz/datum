@@ -29,6 +29,9 @@ class ModelTest extends TestCase
         // Handle foreign key constraints
         if ($driver === 'sqlite') {
             $connection->execute("DELETE FROM \"{$table}\"");
+        } elseif ($driver === 'sqlsrv') {
+            // SQL Server: DELETE instead of TRUNCATE to handle foreign keys
+            $connection->execute("DELETE FROM \"{$table}\"");
         } elseif ($driver === 'mysql') {
             // Disable foreign key checks temporarily
             $connection->execute('SET FOREIGN_KEY_CHECKS = 0');
@@ -1191,8 +1194,9 @@ class ModelTest extends TestCase
         $reloaded = User::find($user->id);
         $this->assertNotNull($reloaded->created_at);
         $this->assertNotNull($reloaded->updated_at);
-        $this->assertEquals('2024-01-15 10:30:00', $reloaded->created_at);
-        $this->assertEquals('2024-01-15 10:30:00', $reloaded->updated_at);
+        // SQLite may return timestamps with microseconds, so check the first 19 characters (YYYY-MM-DD HH:MM:SS)
+        $this->assertEquals('2024-01-15 10:30:00', substr($reloaded->created_at, 0, 19));
+        $this->assertEquals('2024-01-15 10:30:00', substr($reloaded->updated_at, 0, 19));
     }
 
     /**
@@ -1233,8 +1237,9 @@ class ModelTest extends TestCase
 
         // Reload from database to verify
         $reloaded = User::find($user->id);
-        $this->assertEquals('2024-01-15 10:30:00', $reloaded->created_at);
-        $this->assertEquals('2024-01-15 11:00:00', $reloaded->updated_at);
+        // SQLite may return timestamps with microseconds, so check the first 19 characters (YYYY-MM-DD HH:MM:SS)
+        $this->assertEquals('2024-01-15 10:30:00', substr($reloaded->created_at, 0, 19));
+        $this->assertEquals('2024-01-15 11:00:00', substr($reloaded->updated_at, 0, 19));
     }
 
     /**
@@ -1263,8 +1268,9 @@ class ModelTest extends TestCase
 
         // Reload from database to verify
         $reloaded = User::find($user->id);
-        $this->assertEquals($customCreatedAt, $reloaded->created_at);
-        $this->assertEquals($customUpdatedAt, $reloaded->updated_at);
+        // SQLite may return timestamps with microseconds, so check the first 19 characters (YYYY-MM-DD HH:MM:SS)
+        $this->assertEquals($customCreatedAt, substr($reloaded->created_at, 0, 19));
+        $this->assertEquals($customUpdatedAt, substr($reloaded->updated_at, 0, 19));
     }
 
     /**
@@ -1384,6 +1390,10 @@ class ModelTest extends TestCase
 
         $this->truncateTable($connection, 'uuid_items');
 
+        // Use a frozen clock for the initial save
+        $initialTime = new \DateTimeImmutable('2024-01-15 10:30:00');
+        Model::clock(new FrozenClock($initialTime));
+
         // Use model with timestamps enabled
         $item = new UuidItemWithTimestamps(['name' => 'Test Item']);
         $this->assertTrue($item->save());
@@ -1401,14 +1411,19 @@ class ModelTest extends TestCase
         $this->assertNotNull($item->created_at);
         $this->assertNotNull($item->updated_at);
         $this->assertEquals($item->created_at, $item->updated_at);
+        $this->assertEquals('2024-01-15 10:30:00', $item->created_at);
+        $this->assertEquals('2024-01-15 10:30:00', $item->updated_at);
 
-        // Wait a moment and update
-        sleep(1);
+        // Update the clock to a later time for the update
+        $laterTime = new \DateTimeImmutable('2024-01-15 11:00:00');
+        Model::clock(new FrozenClock($laterTime));
+
         $item->name = 'Updated Item';
         $this->assertTrue($item->save());
 
         // created_at should remain the same, updated_at should change
-        $this->assertEquals($item->created_at, $item->created_at);
+        $this->assertEquals('2024-01-15 10:30:00', $item->created_at);
+        $this->assertEquals('2024-01-15 11:00:00', $item->updated_at);
         $this->assertNotEquals($item->created_at, $item->updated_at);
     }
 
@@ -1464,12 +1479,15 @@ class ModelTest extends TestCase
         $this->assertEquals($customTime, $item->created_at);
         $this->assertEquals($customTime, $item->updated_at);
 
-        // Update should only change updated_at
-        sleep(1);
+        // Update the clock to a later time for the update
+        $laterTime = new \DateTimeImmutable('2024-01-15 11:00:00');
+        Model::clock(new FrozenClock($laterTime));
+
         $item->name = 'Updated Item';
         $this->assertTrue($item->save());
 
         $this->assertEquals($customTime, $item->created_at);
+        $this->assertEquals('2024-01-15 11:00:00', $item->updated_at);
         $this->assertNotEquals($customTime, $item->updated_at);
     }
 
@@ -1490,6 +1508,16 @@ class ModelTest extends TestCase
                 Connection::OPT_DATABASE => 'testdb',
                 Connection::OPT_USERNAME => 'postgres',
                 Connection::OPT_PASSWORD => 'postgres',
+            ])],
+            // SQL Server
+            [new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'testdb',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
             ])],
         ];
 

@@ -28,6 +28,9 @@ class RelationshipTest extends TestCase
         // Handle foreign key constraints
         if ($driver === 'sqlite') {
             $connection->execute("DELETE FROM \"{$table}\"");
+        } elseif ($driver === 'sqlsrv') {
+            // SQL Server: DELETE instead of TRUNCATE to handle foreign keys
+            $connection->execute("DELETE FROM \"{$table}\"");
         } elseif ($driver === 'mysql') {
             // Disable foreign key checks temporarily
             $connection->execute('SET FOREIGN_KEY_CHECKS = 0');
@@ -241,6 +244,16 @@ class RelationshipTest extends TestCase
                 Connection::OPT_DATABASE => 'testdb',
                 Connection::OPT_USERNAME => 'postgres',
                 Connection::OPT_PASSWORD => 'postgres',
+            ])],
+            // SQL Server
+            [new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'testdb',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
             ])],
         ];
 

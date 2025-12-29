@@ -5,7 +5,7 @@
   "license": "MIT",
   "require": {
     "php": "^8.2",
-    "vaibhavpandeyvpz/databoss": "^2.0",
+    "vaibhavpandeyvpz/databoss": "^2.1",
     "psr/clock": "^1.0"
   },
   "require-dev": {

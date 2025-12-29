@@ -17,7 +17,7 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 - **UUID Primary Keys**: Support for UUID primary keys with automatic UUID v4 generation
 - **Lazy Connection Loading**: Connection factory support for lazy database connection creation
 - **Built on Databoss**: Leverages the powerful databoss filtering syntax
-- **Multi-Database Support**: Works with MySQL, PostgreSQL, and SQLite
+- **Multi-Database Support**: Works with MySQL, PostgreSQL, SQLite, and SQL Server
 - **Type-safe**: Full PHP 8.2+ type declarations
 - **Well Tested**: 90%+ code coverage with comprehensive test suite
 
@@ -25,7 +25,7 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 
 - PHP >= 8.2
 - PDO extension
-- One of: `ext-pdo_mysql`, `ext-pdo_pgsql`, or `ext-pdo_sqlite` (depending on your database)
+- One of: `ext-pdo_mysql`, `ext-pdo_pgsql`, `ext-pdo_sqlite`, or `ext-pdo_sqlsrv` (depending on your database)
 
 ## Installation
 
@@ -36,7 +36,7 @@ composer require vaibhavpandeyvpz/datum
 Or if you want to install the databoss dependency separately:
 
 ```bash
-composer require vaibhavpandeyvpz/databoss ^2.0
+composer require vaibhavpandeyvpz/databoss ^2.1
 composer require vaibhavpandeyvpz/datum
 ```
 
@@ -588,7 +588,7 @@ $posts = $user->posts;
 The project includes Docker Compose configuration for running tests:
 
 ```bash
-# Start database containers (MySQL and PostgreSQL)
+# Start database containers (MySQL, PostgreSQL, and SQL Server)
 docker compose up -d
 
 # Wait for databases to be ready, then run tests
@@ -601,7 +601,7 @@ XDEBUG_MODE=coverage ./vendor/bin/phpunit --coverage-text
 docker compose down
 ```
 
-Tests run against MySQL, PostgreSQL, and SQLite to ensure compatibility across all supported databases.
+Tests run against MySQL, PostgreSQL, SQLite, and SQL Server to ensure compatibility across all supported databases.
 
 The test suite includes:
 
