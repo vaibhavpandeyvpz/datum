@@ -1296,6 +1296,183 @@ class ModelTest extends TestCase
         $this->assertArrayNotHasKey('updated_at', $user->attributes());
     }
 
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_auto_generation(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        // Create a model with UUID primary key
+        $item = new UuidItem(['name' => 'Test Item']);
+        $this->assertTrue($item->save());
+        $this->assertTrue($item->exists());
+
+        // UUID should be automatically generated
+        $uuid = $item->uuid;
+        $this->assertNotNull($uuid);
+        $this->assertIsString($uuid);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            $uuid
+        );
+
+        // Should be able to find by UUID
+        $found = UuidItem::find($uuid);
+        $this->assertNotNull($found);
+        $this->assertEquals('Test Item', $found->name);
+        $this->assertEquals($uuid, $found->uuid);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_manual_setting(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        // Manually set UUID
+        $customUuid = '550e8400-e29b-41d4-a716-446655440000';
+        $item = new UuidItem(['uuid' => $customUuid, 'name' => 'Custom UUID Item']);
+        $this->assertTrue($item->save());
+        $this->assertEquals($customUuid, $item->uuid);
+
+        // Should be able to find by custom UUID
+        $found = UuidItem::find($customUuid);
+        $this->assertNotNull($found);
+        $this->assertEquals('Custom UUID Item', $found->name);
+        $this->assertEquals($customUuid, $found->uuid);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_update(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        $item = new UuidItem(['name' => 'Original Name']);
+        $this->assertTrue($item->save());
+
+        $uuid = $item->uuid;
+
+        // Update the item
+        $item->name = 'Updated Name';
+        $this->assertTrue($item->save());
+
+        // UUID should remain the same
+        $this->assertEquals($uuid, $item->uuid);
+
+        // Verify update persisted
+        $found = UuidItem::find($uuid);
+        $this->assertNotNull($found);
+        $this->assertEquals('Updated Name', $found->name);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_with_timestamps_enabled(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        // Use model with timestamps enabled
+        $item = new UuidItemWithTimestamps(['name' => 'Test Item']);
+        $this->assertTrue($item->save());
+        $this->assertTrue($item->exists());
+
+        // UUID should be automatically generated
+        $uuid = $item->uuid;
+        $this->assertNotNull($uuid);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            $uuid
+        );
+
+        // Timestamps should be automatically set
+        $this->assertNotNull($item->created_at);
+        $this->assertNotNull($item->updated_at);
+        $this->assertEquals($item->created_at, $item->updated_at);
+
+        // Wait a moment and update
+        sleep(1);
+        $item->name = 'Updated Item';
+        $this->assertTrue($item->save());
+
+        // created_at should remain the same, updated_at should change
+        $this->assertEquals($item->created_at, $item->created_at);
+        $this->assertNotEquals($item->created_at, $item->updated_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_with_timestamps_disabled(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        // Use model with timestamps disabled
+        $item = new UuidItem(['name' => 'Test Item']);
+        $this->assertTrue($item->save());
+        $this->assertTrue($item->exists());
+
+        // UUID should be automatically generated
+        $uuid = $item->uuid;
+        $this->assertNotNull($uuid);
+
+        // Timestamps should NOT be set (even though table has columns)
+        $this->assertArrayNotHasKey('created_at', $item->attributes());
+        $this->assertArrayNotHasKey('updated_at', $item->attributes());
+
+        // Update should also not set timestamps
+        $item->name = 'Updated Item';
+        $this->assertTrue($item->save());
+
+        $this->assertArrayNotHasKey('created_at', $item->attributes());
+        $this->assertArrayNotHasKey('updated_at', $item->attributes());
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_uuid_primary_key_manual_timestamps_respected(Connection $connection): void
+    {
+        Model::connect($connection);
+
+        $this->truncateTable($connection, 'uuid_items');
+
+        // Use model with timestamps enabled
+        $customTime = '2024-01-15 10:30:00';
+        $item = new UuidItemWithTimestamps([
+            'name' => 'Test Item',
+            'created_at' => $customTime,
+            'updated_at' => $customTime,
+        ]);
+        $this->assertTrue($item->save());
+
+        // Manual timestamps should be respected
+        $this->assertEquals($customTime, $item->created_at);
+        $this->assertEquals($customTime, $item->updated_at);
+
+        // Update should only change updated_at
+        sleep(1);
+        $item->name = 'Updated Item';
+        $this->assertTrue($item->save());
+
+        $this->assertEquals($customTime, $item->created_at);
+        $this->assertNotEquals($customTime, $item->updated_at);
+    }
+
     public function provideConnection(): array
     {
         $connections = [
@@ -1350,4 +1527,32 @@ class UserWithCasts extends User
         'metadata' => 'array',
         'is_active' => 'bool',
     ];
+}
+
+/**
+ * Test model with UUID primary key (timestamps disabled)
+ */
+class UuidItem extends Model
+{
+    protected static ?string $table = 'uuid_items';
+
+    protected static string $primaryKey = 'uuid';
+
+    protected static bool $incrementing = false;
+
+    protected static bool $timestamps = false;
+}
+
+/**
+ * Test model with UUID primary key and timestamps enabled
+ */
+class UuidItemWithTimestamps extends Model
+{
+    protected static ?string $table = 'uuid_items';
+
+    protected static string $primaryKey = 'uuid';
+
+    protected static bool $incrementing = false;
+
+    protected static bool $timestamps = true;
 }

@@ -40,3 +40,10 @@ CREATE TABLE IF NOT EXISTS "user_roles" (
     FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS "uuid_items" (
+    "uuid" UUID NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "created_at" TIMESTAMP NULL,
+    "updated_at" TIMESTAMP NULL,
+    PRIMARY KEY ("uuid")
+);

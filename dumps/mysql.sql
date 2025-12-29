@@ -46,3 +46,10 @@ CREATE TABLE IF NOT EXISTS "user_roles" (
     FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE CASCADE
 ) ENGINE InnoDB;
 
+CREATE TABLE IF NOT EXISTS "uuid_items" (
+    "uuid" CHAR(36) NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    "created_at" TIMESTAMP NULL,
+    "updated_at" TIMESTAMP NULL,
+    PRIMARY KEY ("uuid")
+) ENGINE InnoDB;

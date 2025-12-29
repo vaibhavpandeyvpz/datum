@@ -14,6 +14,7 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 - **Relationships**: Support for `one` (has one), `many` (has many), `owner` (belongs to), and `owners` (belongs to many) relationships
 - **Attribute Casting**: Automatic type conversion for DateTime, arrays, JSON, integers, floats, and booleans
 - **Automatic Timestamps**: Automatically manages `created_at` and `updated_at` timestamps (enabled by default)
+- **UUID Primary Keys**: Support for UUID primary keys with automatic UUID v4 generation
 - **Lazy Connection Loading**: Connection factory support for lazy database connection creation
 - **Built on Databoss**: Leverages the powerful databoss filtering syntax
 - **Multi-Database Support**: Works with MySQL, PostgreSQL, and SQLite
@@ -215,6 +216,80 @@ $user = new User(['name' => 'Test']);
 $user->save(); // Will use the frozen time for timestamps
 ```
 
+### UUID Primary Keys
+
+Datum supports UUID (Universally Unique Identifier) primary keys in addition to auto-incrementing integer IDs. When using UUIDs, Datum will automatically generate a UUID v4 before inserting the model into the database.
+
+**Setting Up a Model with UUID Primary Key:**
+
+```php
+class Item extends Model
+{
+    protected static ?string $table = 'items';
+    protected static string $primaryKey = 'uuid';
+    protected static bool $incrementing = false;
+}
+```
+
+**Database Schema Example:**
+
+For MySQL:
+
+```sql
+CREATE TABLE "items" (
+    "uuid" CHAR(36) NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    PRIMARY KEY ("uuid")
+);
+```
+
+For PostgreSQL:
+
+```sql
+CREATE TABLE "items" (
+    "uuid" UUID NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    PRIMARY KEY ("uuid")
+);
+```
+
+For SQLite:
+
+```sql
+CREATE TABLE "items" (
+    "uuid" TEXT NOT NULL,
+    "name" VARCHAR(255) NOT NULL,
+    PRIMARY KEY ("uuid")
+);
+```
+
+**Usage:**
+
+```php
+// UUID is automatically generated on insert
+$item = new Item(['name' => 'My Item']);
+$item->save();
+echo $item->uuid; // e.g., "550e8400-e29b-41d4-a716-446655440000"
+
+// You can also manually set a UUID
+$item = new Item([
+    'uuid' => '550e8400-e29b-41d4-a716-446655440000',
+    'name' => 'Custom UUID Item'
+]);
+$item->save();
+
+// Find by UUID
+$item = Item::find('550e8400-e29b-41d4-a716-446655440000');
+```
+
+**Key Points:**
+
+- Set `protected static bool $incrementing = false;` to enable UUID primary keys
+- Set `protected static string $primaryKey = 'uuid';` (or your UUID column name)
+- UUIDs are automatically generated as UUID v4 if not provided
+- You can manually set UUIDs if needed
+- All standard operations (find, update, delete) work with UUIDs
+
 ### Attribute Casting
 
 Datum supports automatic type casting for attributes. Define casts in your model's `$casts` property:
@@ -383,6 +458,7 @@ User::where([
 
 - `protected static ?string $table` - The table name (auto-inferred from class name if not set)
 - `protected static string $primaryKey` - The primary key column name (default: `'id'`)
+- `protected static bool $incrementing` - Indicates if the IDs are auto-incrementing (default: `true`). Set to `false` for UUID primary keys
 - `protected static array $casts` - Attribute casting configuration
 - `protected static bool $timestamps` - Enable/disable automatic timestamp management (default: `true`)
 - `protected static string $createdAt` - The name of the "created at" column (default: `'created_at'`)
