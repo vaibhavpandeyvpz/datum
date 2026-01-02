@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace Datum;
 
 use Databoss\ConnectionInterface;
+use Datum\Events\Created;
+use Datum\Events\Creating;
+use Datum\Events\Deleted;
+use Datum\Events\Deleting;
+use Datum\Events\Saved;
+use Datum\Events\Saving;
+use Datum\Events\Updated;
+use Datum\Events\Updating;
 use Datum\Relations\Many;
 use Datum\Relations\One;
 use Datum\Relations\Owner;
 use Datum\Relations\Owners;
 use Psr\Clock\ClockInterface;
+use Psr\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Class Model
@@ -73,6 +82,18 @@ abstract class Model
     protected static ?ClockInterface $clock = null;
 
     /**
+     * The event dispatcher instance.
+     */
+    protected static ?EventDispatcherInterface $dispatcher = null;
+
+    /**
+     * The event dispatcher factory (callable that returns EventDispatcherInterface).
+     *
+     * @var (callable(): EventDispatcherInterface)|null
+     */
+    protected static $dispatcherFactory = null;
+
+    /**
      * The model's attributes.
      *
      * @var array<string, mixed>
@@ -129,6 +150,53 @@ abstract class Model
     public static function clock(ClockInterface $clock): void
     {
         static::$clock = $clock;
+    }
+
+    /**
+     * Set the event dispatcher instance or factory.
+     *
+     * @param  EventDispatcherInterface|(callable(): EventDispatcherInterface)|null  $dispatcherOrFactory
+     */
+    public static function dispatcher(EventDispatcherInterface|callable|null $dispatcherOrFactory = null): void
+    {
+        if ($dispatcherOrFactory === null) {
+            static::$dispatcher = null;
+            static::$dispatcherFactory = null;
+        } elseif ($dispatcherOrFactory instanceof EventDispatcherInterface) {
+            static::$dispatcher = $dispatcherOrFactory;
+            static::$dispatcherFactory = null;
+        } else {
+            static::$dispatcherFactory = $dispatcherOrFactory;
+            static::$dispatcher = null;
+        }
+    }
+
+    /**
+     * Get the event dispatcher instance, creating it lazily from factory if needed.
+     */
+    protected static function getDispatcher(): ?EventDispatcherInterface
+    {
+        // If dispatcher is already set, return it
+        if (static::$dispatcher !== null) {
+            return static::$dispatcher;
+        }
+
+        // If factory is set, create dispatcher from factory
+        return static::$dispatcherFactory !== null
+            ? static::$dispatcher = (static::$dispatcherFactory)()
+            : null;
+    }
+
+    /**
+     * Dispatch an event if a dispatcher is available.
+     */
+    protected static function dispatchEvent(object $event): void
+    {
+        $dispatcher = static::getDispatcher();
+
+        if ($dispatcher !== null) {
+            $dispatcher->dispatch($event);
+        }
     }
 
     /**
@@ -449,11 +517,23 @@ abstract class Model
             return false;
         }
 
-        if ($this->exists) {
-            return $this->update();
+        // Dispatch saving event
+        $savingEvent = new Saving($this);
+        static::dispatchEvent($savingEvent);
+
+        // If propagation was stopped, abort the save
+        if ($savingEvent->isPropagationStopped()) {
+            return false;
         }
 
-        return $this->insert();
+        $result = $this->exists ? $this->update() : $this->insert();
+
+        // Dispatch saved event only if the operation was successful
+        if ($result) {
+            static::dispatchEvent(new Saved($this));
+        }
+
+        return $result;
     }
 
     /**
@@ -464,6 +544,15 @@ abstract class Model
         $connection = static::getConnection();
 
         if ($connection === null) {
+            return false;
+        }
+
+        // Dispatch creating event
+        $creatingEvent = new Creating($this);
+        static::dispatchEvent($creatingEvent);
+
+        // If propagation was stopped, abort the insert
+        if ($creatingEvent->isPropagationStopped()) {
             return false;
         }
 
@@ -504,6 +593,9 @@ abstract class Model
 
             $this->exists = true;
 
+            // Dispatch created event
+            static::dispatchEvent(new Created($this));
+
             return true;
         }
 
@@ -528,6 +620,15 @@ abstract class Model
             return false;
         }
 
+        // Dispatch updating event
+        $updatingEvent = new Updating($this);
+        static::dispatchEvent($updatingEvent);
+
+        // If propagation was stopped, abort the update
+        if ($updatingEvent->isPropagationStopped()) {
+            return false;
+        }
+
         // Set updated_at if timestamps are enabled
         if (static::$timestamps) {
             $updatedAt = static::$updatedAt;
@@ -542,6 +643,11 @@ abstract class Model
             $attributes,
             [$primaryKey => $id]
         );
+
+        if ($result !== false) {
+            // Dispatch updated event
+            static::dispatchEvent(new Updated($this));
+        }
 
         return $result !== false;
     }
@@ -568,6 +674,15 @@ abstract class Model
             return false;
         }
 
+        // Dispatch deleting event
+        $deletingEvent = new Deleting($this);
+        static::dispatchEvent($deletingEvent);
+
+        // If propagation was stopped, abort the delete
+        if ($deletingEvent->isPropagationStopped()) {
+            return false;
+        }
+
         $result = $connection->delete(
             static::getTable(),
             [$primaryKey => $id]
@@ -575,6 +690,9 @@ abstract class Model
 
         if ($result !== false) {
             $this->exists = false;
+
+            // Dispatch deleted event
+            static::dispatchEvent(new Deleted($this));
 
             return true;
         }

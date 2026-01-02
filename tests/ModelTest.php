@@ -8,9 +8,18 @@ require_once __DIR__.'/TestModels.php';
 
 use Databoss\Connection;
 use Databoss\DatabaseDriver;
+use Datum\Events\Created;
+use Datum\Events\Creating;
+use Datum\Events\Deleted;
+use Datum\Events\Deleting;
+use Datum\Events\Saved;
+use Datum\Events\Saving;
+use Datum\Events\Updated;
+use Datum\Events\Updating;
 use Datum\Model;
 use PHPUnit\Framework\TestCase;
 use Samay\FrozenClock;
+use Soochak\EventManager;
 
 /**
  * Class ModelTest
@@ -1489,6 +1498,436 @@ class ModelTest extends TestCase
         $this->assertEquals($customTime, $item->created_at);
         $this->assertEquals('2024-01-15 11:00:00', $item->updated_at);
         $this->assertNotEquals($customTime, $item->updated_at);
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_saving_event_on_insert(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $savingFired = false;
+        $savedFired = false;
+        $creatingFired = false;
+        $createdFired = false;
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+        });
+
+        $dispatcher->attach(Saved::class, function (Saved $event) use (&$savedFired) {
+            $savedFired = true;
+        });
+
+        $dispatcher->attach(Creating::class, function (Creating $event) use (&$creatingFired) {
+            $creatingFired = true;
+        });
+
+        $dispatcher->attach(Created::class, function (Created $event) use (&$createdFired) {
+            $createdFired = true;
+        });
+
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $this->assertTrue($user->save());
+
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+        $this->assertTrue($creatingFired, 'Creating event should be fired');
+        $this->assertTrue($createdFired, 'Created event should be fired');
+        $this->assertTrue($savedFired, 'Saved event should be fired');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_saving_event_on_update(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $savingFired = false;
+        $savedFired = false;
+        $updatingFired = false;
+        $updatedFired = false;
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+        });
+
+        $dispatcher->attach(Saved::class, function (Saved $event) use (&$savedFired) {
+            $savedFired = true;
+        });
+
+        $dispatcher->attach(Updating::class, function (Updating $event) use (&$updatingFired) {
+            $updatingFired = true;
+        });
+
+        $dispatcher->attach(Updated::class, function (Updated $event) use (&$updatedFired) {
+            $updatedFired = true;
+        });
+
+        // Create user first
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+
+        // Reset flags
+        $savingFired = false;
+        $savedFired = false;
+        $updatingFired = false;
+        $updatedFired = false;
+
+        // Update user
+        $user->name = 'Updated';
+        $this->assertTrue($user->save());
+
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+        $this->assertTrue($updatingFired, 'Updating event should be fired');
+        $this->assertTrue($updatedFired, 'Updated event should be fired');
+        $this->assertTrue($savedFired, 'Saved event should be fired');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_deleting_and_deleted_events(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $deletingFired = false;
+        $deletedFired = false;
+
+        $dispatcher->attach(Deleting::class, function (Deleting $event) use (&$deletingFired) {
+            $deletingFired = true;
+        });
+
+        $dispatcher->attach(Deleted::class, function (Deleted $event) use (&$deletedFired) {
+            $deletedFired = true;
+        });
+
+        // Create user first
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+
+        // Delete user
+        $this->assertTrue($user->delete());
+
+        $this->assertTrue($deletingFired, 'Deleting event should be fired');
+        $this->assertTrue($deletedFired, 'Deleted event should be fired');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_propagation_stopping_on_saving(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $savingFired = false;
+        $creatingFired = false;
+        $savedFired = false;
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+            $event->stopPropagation();
+        });
+
+        $dispatcher->attach(Creating::class, function (Creating $event) use (&$creatingFired) {
+            $creatingFired = true;
+        });
+
+        $dispatcher->attach(Saved::class, function (Saved $event) use (&$savedFired) {
+            $savedFired = true;
+        });
+
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $result = $user->save();
+
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+        $this->assertFalse($creatingFired, 'Creating event should not be fired when propagation is stopped');
+        $this->assertFalse($savedFired, 'Saved event should not be fired when propagation is stopped');
+        $this->assertFalse($result, 'Save should return false when propagation is stopped');
+        $this->assertFalse($user->exists(), 'Model should not exist when save is aborted');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_propagation_stopping_on_creating(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $savingFired = false;
+        $creatingFired = false;
+        $createdFired = false;
+        $savedFired = false;
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+        });
+
+        $dispatcher->attach(Creating::class, function (Creating $event) use (&$creatingFired) {
+            $creatingFired = true;
+            $event->stopPropagation();
+        });
+
+        $dispatcher->attach(Created::class, function (Created $event) use (&$createdFired) {
+            $createdFired = true;
+        });
+
+        $dispatcher->attach(Saved::class, function (Saved $event) use (&$savedFired) {
+            $savedFired = true;
+        });
+
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $result = $user->save();
+
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+        $this->assertTrue($creatingFired, 'Creating event should be fired');
+        $this->assertFalse($createdFired, 'Created event should not be fired when propagation is stopped');
+        $this->assertFalse($savedFired, 'Saved event should not be fired when propagation is stopped');
+        $this->assertFalse($result, 'Save should return false when propagation is stopped');
+        $this->assertFalse($user->exists(), 'Model should not exist when save is aborted');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_propagation_stopping_on_updating(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $savingFired = false;
+        $updatingFired = false;
+        $updatedFired = false;
+        $savedFired = false;
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+        });
+
+        $dispatcher->attach(Updating::class, function (Updating $event) use (&$updatingFired) {
+            $updatingFired = true;
+            $event->stopPropagation();
+        });
+
+        $dispatcher->attach(Updated::class, function (Updated $event) use (&$updatedFired) {
+            $updatedFired = true;
+        });
+
+        $dispatcher->attach(Saved::class, function (Saved $event) use (&$savedFired) {
+            $savedFired = true;
+        });
+
+        // Create user first
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+
+        // Reset flags
+        $savingFired = false;
+        $updatingFired = false;
+        $updatedFired = false;
+        $savedFired = false;
+
+        // Try to update user
+        $user->name = 'Updated';
+        $result = $user->save();
+
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+        $this->assertTrue($updatingFired, 'Updating event should be fired');
+        $this->assertFalse($updatedFired, 'Updated event should not be fired when propagation is stopped');
+        $this->assertFalse($savedFired, 'Saved event should not be fired when propagation is stopped');
+        $this->assertFalse($result, 'Save should return false when propagation is stopped');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_propagation_stopping_on_deleting(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $deletingFired = false;
+        $deletedFired = false;
+
+        $dispatcher->attach(Deleting::class, function (Deleting $event) use (&$deletingFired) {
+            $deletingFired = true;
+            $event->stopPropagation();
+        });
+
+        $dispatcher->attach(Deleted::class, function (Deleted $event) use (&$deletedFired) {
+            $deletedFired = true;
+        });
+
+        // Create user first
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+        $userId = $user->id;
+
+        // Try to delete user
+        $result = $user->delete();
+
+        $this->assertTrue($deletingFired, 'Deleting event should be fired');
+        $this->assertFalse($deletedFired, 'Deleted event should not be fired when propagation is stopped');
+        $this->assertFalse($result, 'Delete should return false when propagation is stopped');
+        $this->assertTrue($user->exists(), 'Model should still exist when delete is aborted');
+
+        // Verify user still exists in database
+        $reloaded = User::find($userId);
+        $this->assertNotNull($reloaded, 'User should still exist in database');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_events_without_dispatcher(Connection $connection): void
+    {
+        Model::connect($connection);
+        Model::dispatcher(null); // Clear dispatcher
+        $this->truncateTable($connection, 'users');
+
+        // Should work fine without dispatcher (no events fired, but operation succeeds)
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $this->assertTrue($user->save());
+        $this->assertTrue($user->exists());
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_events_with_dispatcher_factory(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcherCreated = false;
+        $savingFired = false;
+
+        Model::dispatcher(function () use (&$dispatcherCreated) {
+            $dispatcherCreated = true;
+
+            return new EventManager;
+        });
+
+        // Get dispatcher using reflection to attach listener
+        $reflection = new \ReflectionClass(Model::class);
+        $method = $reflection->getMethod('getDispatcher');
+        $method->setAccessible(true);
+        $dispatcher = $method->invoke(null);
+        $this->assertNotNull($dispatcher);
+        $this->assertTrue($dispatcherCreated, 'Dispatcher factory should be called');
+
+        $dispatcher->attach(Saving::class, function (Saving $event) use (&$savingFired) {
+            $savingFired = true;
+        });
+
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $this->assertTrue($user->save());
+        $this->assertTrue($savingFired, 'Saving event should be fired');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_order_on_insert(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $eventOrder = [];
+
+        $dispatcher->attach(Saving::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'saving';
+        });
+
+        $dispatcher->attach(Creating::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'creating';
+        });
+
+        $dispatcher->attach(Created::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'created';
+        });
+
+        $dispatcher->attach(Saved::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'saved';
+        });
+
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+
+        $this->assertEquals(['saving', 'creating', 'created', 'saved'], $eventOrder, 'Events should fire in correct order');
+    }
+
+    /**
+     * @dataProvider provideConnection
+     */
+    public function test_event_order_on_update(Connection $connection): void
+    {
+        Model::connect($connection);
+        $this->truncateTable($connection, 'users');
+
+        $dispatcher = new EventManager;
+        Model::dispatcher($dispatcher);
+
+        $eventOrder = [];
+
+        $dispatcher->attach(Saving::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'saving';
+        });
+
+        $dispatcher->attach(Updating::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'updating';
+        });
+
+        $dispatcher->attach(Updated::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'updated';
+        });
+
+        $dispatcher->attach(Saved::class, function () use (&$eventOrder) {
+            $eventOrder[] = 'saved';
+        });
+
+        // Create user first
+        $user = new User(['name' => 'Test', 'email' => 'test@example.com']);
+        $user->save();
+
+        // Reset order
+        $eventOrder = [];
+
+        // Update user
+        $user->name = 'Updated';
+        $user->save();
+
+        $this->assertEquals(['saving', 'updating', 'updated', 'saved'], $eventOrder, 'Events should fire in correct order');
     }
 
     public function provideConnection(): array
