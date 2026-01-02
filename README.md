@@ -16,6 +16,7 @@ A simple Active Record ORM for PHP built on top of [vaibhavpandeyvpz/databoss](h
 - **Automatic Timestamps**: Automatically manages `created_at` and `updated_at` timestamps (enabled by default)
 - **UUID Primary Keys**: Support for UUID primary keys with automatic UUID v4 generation
 - **Lazy Connection Loading**: Connection factory support for lazy database connection creation
+- **PSR-14 Event Dispatcher**: Model lifecycle events (creating, created, updating, updated, deleting, deleted, saving, saved)
 - **Built on Databoss**: Leverages the powerful databoss filtering syntax
 - **Multi-Database Support**: Works with MySQL, PostgreSQL, SQLite, and SQL Server
 - **Type-safe**: Full PHP 8.2+ type declarations
@@ -422,6 +423,181 @@ $user = User::find(1);
 $roles = $user->roles; // Array of Role models
 ```
 
+### Model Events
+
+Datum supports PSR-14 compliant event dispatching, allowing you to hook into model lifecycle events. Events are fired at key points during model operations, giving you the ability to perform actions like logging, validation, or side effects.
+
+**Setting Up the Event Dispatcher:**
+
+You can set the dispatcher directly or use a factory for lazy dispatcher creation:
+
+```php
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Soochak\EventManager;
+use Datum\Model;
+
+// Set dispatcher directly
+$dispatcher = new EventManager();
+Model::dispatcher($dispatcher);
+
+// Or use a factory for lazy loading
+Model::dispatcher(function () {
+    return new EventManager();
+});
+
+// Clear dispatcher (operations will work without events)
+Model::dispatcher(null);
+```
+
+**Available Events:**
+
+Datum fires the following events during model operations:
+
+- **`Datum\Events\Saving`** - Fired before saving (both create and update)
+- **`Datum\Events\Saved`** - Fired after saving (both create and update)
+- **`Datum\Events\Creating`** - Fired before creating a new model
+- **`Datum\Events\Created`** - Fired after creating a new model
+- **`Datum\Events\Updating`** - Fired before updating an existing model
+- **`Datum\Events\Updated`** - Fired after updating an existing model
+- **`Datum\Events\Deleting`** - Fired before deleting a model
+- **`Datum\Events\Deleted`** - Fired after deleting a model
+
+**Event Order:**
+
+When saving a new model:
+
+1. `Saving` event
+2. `Creating` event
+3. Database insert
+4. `Created` event
+5. `Saved` event
+
+When updating an existing model:
+
+1. `Saving` event
+2. `Updating` event
+3. Database update
+4. `Updated` event
+5. `Saved` event
+
+When deleting a model:
+
+1. `Deleting` event
+2. Database delete
+3. `Deleted` event
+
+**Listening to Events:**
+
+All events implement `Psr\EventDispatcher\StoppableEventInterface`, allowing you to stop event propagation if needed:
+
+```php
+use Datum\Events\Saving;
+use Datum\Events\Created;
+use Soochak\EventManager;
+
+$dispatcher = new EventManager();
+Model::dispatcher($dispatcher);
+
+// Listen to saving event
+$dispatcher->attach(Saving::class, function (Saving $event) {
+    $model = $event->model;
+    echo "Saving model: {$model->name}\n";
+
+    // You can stop propagation to abort the operation
+    // $event->stopPropagation();
+});
+
+// Listen to created event
+$dispatcher->attach(Created::class, function (Created $event) {
+    $model = $event->model;
+    echo "Model created with ID: {$model->id}\n";
+});
+
+// Create a user
+$user = new User(['name' => 'John', 'email' => 'john@example.com']);
+$user->save(); // Events will be fired
+```
+
+**Stopping Event Propagation:**
+
+You can stop event propagation to abort an operation:
+
+```php
+use Datum\Events\Saving;
+
+$dispatcher->attach(Saving::class, function (Saving $event) {
+    $model = $event->model;
+
+    // Validate and stop if invalid
+    if (empty($model->email)) {
+        $event->stopPropagation();
+        return;
+    }
+});
+
+$user = new User(['name' => 'John']); // No email
+$result = $user->save(); // Returns false, model not saved
+```
+
+**Complete Example:**
+
+```php
+use Soochak\EventManager;
+use Datum\Events\Saving;
+use Datum\Events\Created;
+use Datum\Events\Updated;
+use Datum\Events\Deleting;
+use Datum\Model;
+
+// Setup dispatcher
+$dispatcher = new EventManager();
+Model::dispatcher($dispatcher);
+
+// Log all saves
+$dispatcher->attach(Saving::class, function (Saving $event) {
+    $model = $event->model;
+    error_log("Saving: " . get_class($model) . " #{$model->id}");
+});
+
+// Log creates
+$dispatcher->attach(Created::class, function (Created $event) {
+    $model = $event->model;
+    error_log("Created: " . get_class($model) . " #{$model->id}");
+});
+
+// Log updates
+$dispatcher->attach(Updated::class, function (Updated $event) {
+    $model = $event->model;
+    error_log("Updated: " . get_class($model) . " #{$model->id}");
+});
+
+// Log deletes
+$dispatcher->attach(Deleting::class, function (Deleting $event) {
+    $model = $event->model;
+    error_log("Deleting: " . get_class($model) . " #{$model->id}");
+});
+
+// Now all model operations will be logged
+$user = new User(['name' => 'John', 'email' => 'john@example.com']);
+$user->save(); // Logs: Saving, Created, Saved
+
+$user->name = 'Jane';
+$user->save(); // Logs: Saving, Updating, Updated, Saved
+
+$user->delete(); // Logs: Deleting, Deleted
+```
+
+**Using with Dependency Injection:**
+
+```php
+use Psr\EventDispatcher\EventDispatcherInterface;
+
+// In your service container or bootstrap
+Model::dispatcher(function () use ($container) {
+    return $container->get(EventDispatcherInterface::class);
+});
+```
+
 ### Advanced Filtering
 
 Datum supports all databoss filter syntax:
@@ -467,6 +643,10 @@ User::where([
 ### Model Static Clock Methods
 
 - `Model::clock(ClockInterface $clock)` - Set a PSR-20 clock instance for timestamp generation
+
+### Model Static Event Dispatcher Methods
+
+- `Model::dispatcher(EventDispatcherInterface|callable|null $dispatcherOrFactory)` - Set the PSR-14 event dispatcher instance, factory, or `null` to clear
 
 ### Model Static Methods
 
