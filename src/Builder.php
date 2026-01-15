@@ -41,10 +41,13 @@ class Builder
 
     /**
      * Create a new query builder instance.
+     *
+     * @param  class-string<Model>|null  $modelClass
      */
     public function __construct(
         protected ?ConnectionInterface $connection = null,
-        protected ?string $table = null
+        protected ?string $table = null,
+        protected ?string $modelClass = null
     ) {}
 
     // </editor-fold>
@@ -100,7 +103,7 @@ class Builder
     /**
      * Execute the query and return all results.
      *
-     * @return array<int, object|array<string, mixed>>|false
+     * @return array<int, Model>|array<int, object|array<string, mixed>>|false
      */
     public function get(): array|false
     {
@@ -111,7 +114,7 @@ class Builder
         $max = $this->limit ?? 0;
         $start = $this->offset ?? 0;
 
-        return $this->connection->select(
+        $results = $this->connection->select(
             $this->table,
             '*',
             $this->where,
@@ -119,14 +122,25 @@ class Builder
             $max,
             $start
         );
+
+        if ($results === false) {
+            return false;
+        }
+
+        // Convert to model instances if model class is set
+        if ($this->modelClass !== null) {
+            return array_map(fn ($result) => $this->modelClass::preload($result), $results);
+        }
+
+        return $results;
     }
 
     /**
      * Execute the query and return the first result.
      *
-     * @return object|array<string, mixed>|false
+     * @return Model|array<string, mixed>|false|null
      */
-    public function first(): object|array|false
+    public function first(): Model|array|false|null
     {
         if ($this->connection === null || $this->table === null) {
             return false;
@@ -134,12 +148,23 @@ class Builder
 
         $start = $this->offset ?? 0;
 
-        return $this->connection->first(
+        $result = $this->connection->first(
             $this->table,
             $this->where,
             $this->orderBy,
             $start
         );
+
+        if ($result === false) {
+            return false;
+        }
+
+        // Convert to model instance if model class is set
+        if ($this->modelClass !== null) {
+            return $this->modelClass::preload($result);
+        }
+
+        return $result;
     }
 
     /**
@@ -179,7 +204,7 @@ class Builder
      */
     public function recreate(): self
     {
-        return new self($this->connection, $this->table);
+        return new self($this->connection, $this->table, $this->modelClass);
     }
     // </editor-fold>
 }

@@ -224,6 +224,7 @@ class ModelTest extends TestCase
         $users = User::where(['age' => 25])->get();
 
         $this->assertCount(1, $users);
+        $this->assertInstanceOf(User::class, $users[0]);
         $this->assertEquals('John', $users[0]->name);
     }
 
@@ -391,6 +392,8 @@ class ModelTest extends TestCase
             ->get();
 
         $this->assertCount(2, $users);
+        $this->assertInstanceOf(User::class, $users[0]);
+        $this->assertInstanceOf(User::class, $users[1]);
         $this->assertEquals(25, $users[0]->age);
         $this->assertEquals(30, $users[1]->age);
     }
@@ -406,14 +409,9 @@ class ModelTest extends TestCase
         $connection->insert('users', ['name' => 'First', 'email' => 'first@example.com']);
         $connection->insert('users', ['name' => 'Second', 'email' => 'second@example.com']);
 
-        $result = User::where(['name' => 'First'])->first();
-        $this->assertNotFalse($result);
-
-        // Use reflection to call protected preload method
-        $reflection = new \ReflectionClass(User::class);
-        $method = $reflection->getMethod('preload');
-        $method->setAccessible(true);
-        $user = $method->invoke(null, $result);
+        $user = User::where(['name' => 'First'])->first();
+        $this->assertNotFalse($user);
+        $this->assertNotNull($user);
 
         $this->assertInstanceOf(User::class, $user);
         $this->assertEquals('First', $user->name);
@@ -569,17 +567,13 @@ class ModelTest extends TestCase
         $connection->insert('users', ['name' => 'Second', 'email' => 'second@example.com', 'age' => 25]);
         $connection->insert('users', ['name' => 'Third', 'email' => 'third@example.com', 'age' => 30]);
 
-        $result = User::where([])
+        $user = User::where([])
             ->sort('age', 'ASC')
             ->offset(1)
             ->first();
 
-        $this->assertNotFalse($result);
-
-        $reflection = new \ReflectionClass(User::class);
-        $method = $reflection->getMethod('preload');
-        $method->setAccessible(true);
-        $user = $method->invoke(null, $result);
+        $this->assertNotFalse($user);
+        $this->assertNotNull($user);
 
         $this->assertInstanceOf(User::class, $user);
         $this->assertEquals('Second', $user->name);

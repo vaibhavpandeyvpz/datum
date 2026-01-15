@@ -262,7 +262,7 @@ abstract class Model
      */
     public static function query(): Builder
     {
-        return new Builder(static::getConnection(), static::getTable());
+        return new Builder(static::getConnection(), static::getTable(), static::class);
     }
 
     /**
@@ -282,7 +282,7 @@ abstract class Model
     {
         $result = static::where([static::getPrimaryKey() => $id])->first();
 
-        return $result === false ? null : static::preload($result);
+        return $result === false || $result === null ? null : $result;
     }
 
     /**
@@ -304,7 +304,7 @@ abstract class Model
     {
         $results = static::query()->get();
 
-        return $results === false ? [] : array_map(fn ($result) => static::preload($result), $results);
+        return $results === false ? [] : $results;
     }
 
     /**
@@ -314,7 +314,7 @@ abstract class Model
     {
         $result = static::query()->first();
 
-        return $result === false ? null : static::preload($result);
+        return $result === false || $result === null ? null : $result;
     }
 
     // </editor-fold>

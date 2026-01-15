@@ -676,8 +676,8 @@ User::where([
 - `sort(string $column, string $direction = 'ASC')` - Add ORDER BY clause
 - `limit(int $limit)` - Set LIMIT clause
 - `offset(int $offset)` - Set OFFSET clause
-- `get()` - Execute and return all results (returns `array|false`)
-- `first()` - Execute and return first result (returns `object|array|false`)
+- `get()` - Execute and return all results as model instances (returns `array<int, Model>|false`)
+- `first()` - Execute and return first result as model instance (returns `Model|null|false`)
 - `count()` - Count matching records (returns `int|false`)
 - `exists()` - Check if any records exist (returns `bool`)
 - `recreate()` - Get a fresh instance of the query builder
